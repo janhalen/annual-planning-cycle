@@ -1,98 +1,168 @@
 import { getMonthNames } from './date-util.js';
 
-// Function to calculate dimensions based on container
-function calculateDimensions(container) {
-  const containerWidth = d3.select(container).node().getBoundingClientRect().width;
-  const width = Math.min(containerWidth, 1200); // Max width of 1200px
-  const height = width;
-  const margin = width * 0.1;
-  const radius = Math.min(width, height) / 2 - margin;
-  
-  return { width, height, radius, margin };
+function createHierarchicalData(issues, months) {
+  // Create all 12 months with empty children arrays
+  const monthData = months.map((month, i) => ({
+    name: month,
+    monthIndex: i,
+    children: []  // Simple array for better D3 hierarchy handling
+  }));
+
+  // Map issues to their respective months
+  issues.forEach(issue => {
+    const date = new Date(issue.created_at);
+    const monthIndex = date.getMonth();
+    const hasLabel = issue.labels.some(label => label.name === 'planning');
+    
+    monthData[monthIndex].children.push({
+      name: issue.title,
+      value: 1,
+      isInner: hasLabel,  // Use property instead of nested structure
+      labels: issue.labels
+    });
+  });
+
+  return {
+    name: "root",
+    children: monthData
+  };
 }
 
-// Function to create the SVG element
-function createSVG(container) {
-  const { width, height, margin } = calculateDimensions(container);
-  
-  return d3.select(container)
+function renderSunburst(container, data, months) {
+  // Reduce dimensions
+  const width = 600;  
+  const radius = width / 2.5;  
+
+  // Create partition layout with fixed month sizes
+  const partition = data => {
+    return d3.partition()
+      .size([2 * Math.PI, radius])(
+        d3.hierarchy(data)
+          .sum(d => {
+            // Give months fixed size, issues their regular value
+            if (d.depth === 1) return 1;
+            return d.value || 0;
+          })
+      );
+  };
+
+  // Create arc generator
+  const arc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+    .padRadius(radius / 2)
+    .innerRadius(d => {
+      if (d.depth === 0) return 0;
+      if (d.depth === 1) return radius * 0.3;
+      return d.data.isInner ? radius * 0.3 : radius * 0.5;
+    })
+    .outerRadius(d => {
+      if (d.depth === 0) return radius * 0.3;
+      if (d.depth === 1) return radius * 0.8;
+      return d.data.isInner ? radius * 0.5 : radius * 0.8;
+    });
+
+  // Create SVG container
+  const svg = d3.select(container)
     .append('svg')
-    .attr('viewBox', `0 0 ${width + margin * 2} ${height + margin * 2}`)
-    .attr('preserveAspectRatio', 'xMidYMid meet')
     .style('width', '100%')
     .style('height', 'auto')
-    .append('g')
-    .attr('transform', `translate(${width / 2 + margin}, ${height / 2 + margin})`);
-}
+    .attr('viewBox', `-${width/2} -${width/2} ${width} ${width}`)
+    .style('font', '10px sans-serif');
 
-// Function to create the arc generator
-function createArc(container) {
-  const { radius } = calculateDimensions(container);
-  return d3.arc()
-    .innerRadius(0)
-    .outerRadius(radius);
-}
+  // Process data
+  const root = partition(createHierarchicalData(data, months));
 
-// Function to create the pie generator
-function createPie() {
-  return d3.pie()
-    .value(d => 1)
-    .sort(null);
-}
+  // Define color arrays
+  const monthColors = [
+    'blue', 'green', 'yellow', 'pink', 'purple', 'orange',
+    'red', 'teal', 'lavender', 'mint', 'blue', 'green'
+  ];
 
-// Function to append arcs to the SVG
-function appendArcs(svg, data, arc) {
-  const arcs = svg.selectAll('.arc')
-    .data(createPie()(data))
-    .enter()
-    .append('g')
-    .attr('class', 'arc');
+  const issueColors = [
+    'green', 'yellow', 'pink', 'purple', 'orange',
+    'red', 'teal', 'lavender', 'mint', 'blue'
+  ];
 
-  arcs.append('path')
+  // Create paths for segments
+  svg.selectAll('path')
+    .data(root.descendants())
+    .join('path')
+    .attr('fill', d => {
+      // Root node (center) is transparent
+      if (d.depth === 0) return 'none';
+      // Month segments get their own colors
+      if (d.depth === 1) {
+        return `var(--pastel-${monthColors[d.data.monthIndex % monthColors.length]})`;
+      }
+      // Issue segments get a slightly different shade
+      const colorIndex = d.parent.children.indexOf(d) % issueColors.length;
+      return `var(--pastel-${issueColors[colorIndex]})`;
+    })
     .attr('d', arc)
-    .attr('class', (d, i) => `segment-${i}`);
+    .attr('class', d => `depth-${d.depth}`);
 
-  arcs.append('text')
-    .attr('transform', d => `translate(${arc.centroid(d)})`)
+  // Separate month labels from issue labels
+  // Month labels (curved around the arcs)
+  const labelRadius = radius + 0;  // Radius for the label path
+
+  // Create invisible paths for text to follow
+  const textPaths = svg.append('defs')
+    .selectAll('path')
+    .data(root.descendants().filter(d => d.depth === 1))
+    .join('path')
+    .attr('id', (d, i) => `monthArc${i}`)
+    .attr('d', d => {
+      const start = d.x0 * 180 / Math.PI;
+      const end = d.x1 * 180 / Math.PI;
+      const centerAngle = (start + end) / 2;
+      return `
+        M ${labelRadius * Math.cos((start - 90) * Math.PI / 180)} 
+          ${labelRadius * Math.sin((start - 90) * Math.PI / 180)}
+        A ${labelRadius} ${labelRadius} 0 0 1
+          ${labelRadius * Math.cos((end - 90) * Math.PI / 180)}
+          ${labelRadius * Math.sin((end - 90) * Math.PI / 180)}
+      `;
+    });
+
+  // Add the curved text
+  svg.selectAll('.month-label')
+    .data(root.descendants().filter(d => d.depth === 1))
+    .join('text')
+    .attr('class', 'month-label')
+    .append('textPath')
+    .attr('xlink:href', (d, i) => `#monthArc${i}`)
+    .attr('startOffset', '25%')
+    .style('text-anchor', 'middle')
+    .style('font-size', '8px')  // Reduced from 12px to 10px
+    .style('fill', 'var(--dark-grey)')
+    .text(d => d.data.name);
+
+  // Issue labels (inside the arcs)
+  svg.selectAll('.issue-label')
+    .data(root.descendants().filter(d => d.depth === 2))
+    .join('text')
+    .attr('class', 'issue-label')
+    .attr('transform', d => {
+      const x = (d.x0 + d.x1) / 2 * 180 / Math.PI;
+      const y = (d.y0 + d.y1) / 2;
+      return `rotate(${x - 90}) translate(${y},0) rotate(${x < 180 ? 0 : 180})`;
+    })
     .attr('dy', '0.35em')
     .attr('text-anchor', 'middle')
-    .text(d => d.data.title);
+    .text(d => d.data.name)
+    .style('visibility', d => {
+      // Show text only for segments with enough space
+      const angle = (d.x1 - d.x0) * 180 / Math.PI;
+      return angle > 5 ? 'visible' : 'hidden';  // Reduced angle threshold from 10 to 5
+    })
+    .style('font-size', '8px')  // Reduced from 10px to 8px
+    .style('fill', 'var(--dark-grey)');
 }
 
-// Function to append month names
-function appendMonthNames(svg, months) {
-  const { radius } = calculateDimensions('.wheel');
-  const monthArc = d3.arc()
-    .innerRadius(radius + 20)
-    .outerRadius(radius + 20);
-
-  const monthArcs = svg.selectAll('.month-arc')
-    .data(months.map((d, i) => ({
-      startAngle: (i * 2 * Math.PI) / 12,
-      endAngle: ((i + 1) * 2 * Math.PI) / 12,
-      month: d
-    })))
-    .enter()
-    .append('g')
-    .attr('class', 'month-arc');
-
-  monthArcs.append('text')
-    .attr('transform', d => `translate(${monthArc.centroid(d)})`)
-    .attr('dy', '0.35em')
-    .attr('text-anchor', 'middle')
-    .text(d => d.month);
-}
-
-// Main function to render the wheel
-function renderWheel(container, data, months) {
-  const svg = createSVG(container);
-  const arc = createArc(container);
-  appendArcs(svg, data, arc);
-  appendMonthNames(svg, months);
-}
-
-// Load the JSON data and render the wheel
+// Load the JSON data and render the sunburst
 d3.json('../data/mock.json').then(data => {
   const months = getMonthNames('da-DK');
-  renderWheel('.wheel', data, months);
+  renderSunburst('.wheel', data, months);
 });
