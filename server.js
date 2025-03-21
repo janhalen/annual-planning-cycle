@@ -15,8 +15,8 @@ app.use((req, res, next) => {
 // Serve static files from the root directory
 app.use(express.static(__dirname));
 
-// Serve static files from the 'data/styles' directory
-app.use('/styles', express.static(path.join(__dirname, 'data/styles')));
+// Serve static files from the 'styles' directory
+app.use('/styles', express.static(path.join(__dirname, 'styles')));
 
 // Set CSP header to allow images from the same origin
 app.use((req, res, next) => {
