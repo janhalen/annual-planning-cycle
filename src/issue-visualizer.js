@@ -92,10 +92,47 @@ function renderSunburst(container, data, months) {
     .attr('d', arc)
     .attr('class', d => `depth-${d.depth}`);
 
-  // Add text labels
-  svg.selectAll('text')
-    .data(root.descendants())
+  // Separate month labels from issue labels
+  // Month labels (curved around the arcs)
+  const labelRadius = radius + 0;  // Radius for the label path
+
+  // Create invisible paths for text to follow
+  const textPaths = svg.append('defs')
+    .selectAll('path')
+    .data(root.descendants().filter(d => d.depth === 1))
+    .join('path')
+    .attr('id', (d, i) => `monthArc${i}`)
+    .attr('d', d => {
+      const start = d.x0 * 180 / Math.PI;
+      const end = d.x1 * 180 / Math.PI;
+      const centerAngle = (start + end) / 2;
+      return `
+        M ${labelRadius * Math.cos((start - 90) * Math.PI / 180)} 
+          ${labelRadius * Math.sin((start - 90) * Math.PI / 180)}
+        A ${labelRadius} ${labelRadius} 0 0 1
+          ${labelRadius * Math.cos((end - 90) * Math.PI / 180)}
+          ${labelRadius * Math.sin((end - 90) * Math.PI / 180)}
+      `;
+    });
+
+  // Add the curved text
+  svg.selectAll('.month-label')
+    .data(root.descendants().filter(d => d.depth === 1))
     .join('text')
+    .attr('class', 'month-label')
+    .append('textPath')
+    .attr('xlink:href', (d, i) => `#monthArc${i}`)
+    .attr('startOffset', '25%')
+    .style('text-anchor', 'middle')
+    .style('font-size', '8px')  // Reduced from 12px to 10px
+    .style('fill', 'var(--dark-grey)')
+    .text(d => d.data.name);
+
+  // Issue labels (inside the arcs)
+  svg.selectAll('.issue-label')
+    .data(root.descendants().filter(d => d.depth === 2))
+    .join('text')
+    .attr('class', 'issue-label')
     .attr('transform', d => {
       const x = (d.x0 + d.x1) / 2 * 180 / Math.PI;
       const y = (d.y0 + d.y1) / 2;
@@ -104,14 +141,12 @@ function renderSunburst(container, data, months) {
     .attr('dy', '0.35em')
     .attr('text-anchor', 'middle')
     .text(d => d.data.name)
-    .attr('class', 'sunburst-text')
     .style('visibility', d => {
-      // Show text only for months and larger issue segments
-      if (d.depth === 0) return 'hidden';
-      if (d.depth === 1) return 'visible';
       const angle = (d.x1 - d.x0) * 180 / Math.PI;
       return angle > 10 ? 'visible' : 'hidden';
-    });
+    })
+    .style('font-size', '10px')
+    .style('fill', 'var(--dark-grey)');
 }
 
 // Load the JSON data and render the sunburst
