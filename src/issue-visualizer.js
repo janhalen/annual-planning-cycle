@@ -1,12 +1,15 @@
 import { getMonthNames } from './date-util.js';
 
 function createHierarchicalData(issues, months) {
+  // Create all 12 months with empty children arrays
   const monthData = months.map((month, i) => ({
     name: month,
     monthIndex: i,
-    children: []
+    children: [],
+    value: 1  // Ensure each month segment has equal size
   }));
 
+  // Map issues to their respective months
   issues.forEach(issue => {
     const date = new Date(issue.created_at);
     const monthIndex = date.getMonth();
@@ -27,12 +30,16 @@ function renderSunburst(container, data, months) {
   const width = 800;
   const radius = width / 2;
 
-  // Create partition layout
+  // Create partition layout with fixed month sizes
   const partition = data => {
     return d3.partition()
       .size([2 * Math.PI, radius])(
         d3.hierarchy(data)
-          .sum(d => d.value || 0)
+          .sum(d => {
+            // Give months fixed size, issues their regular value
+            if (d.depth === 1) return 1;
+            return d.value || 0;
+          })
       );
   };
 
@@ -56,31 +63,34 @@ function renderSunburst(container, data, months) {
   // Process data
   const root = partition(createHierarchicalData(data, months));
 
-  // Define color array for issues
-  const colors = ['blue', 'green', 'yellow', 'pink', 'purple', 
-                 'orange', 'red', 'teal', 'lavender', 'mint'];
+  // Define color arrays
+  const monthColors = [
+    'blue', 'green', 'yellow', 'pink', 'purple', 'orange',
+    'red', 'teal', 'lavender', 'mint', 'blue', 'green'
+  ];
+
+  const issueColors = [
+    'green', 'yellow', 'pink', 'purple', 'orange',
+    'red', 'teal', 'lavender', 'mint', 'blue'
+  ];
 
   // Create paths for segments
   svg.selectAll('path')
-  .data(root.descendants())
-  .join('path')
-  .attr('fill', d => {
-    // Root node (center) is transparent
-    if (d.depth === 0) return 'none';
-    // Month segments get their own colors
-    if (d.depth === 1) {
-      const monthColors = ['blue', 'green', 'yellow', 'pink', 'purple', 
-                         'orange', 'red', 'teal', 'lavender', 'mint'];
-      return `var(--pastel-${monthColors[d.data.monthIndex % monthColors.length]})`;
-    }
-    // Issue segments get a slightly different shade
-    const issueColors = ['green', 'yellow', 'pink', 'purple', 'orange', 
-                        'red', 'teal', 'lavender', 'mint', 'blue'];
-    const colorIndex = d.parent.children.indexOf(d) % issueColors.length;
-    return `var(--pastel-${issueColors[colorIndex]})`;
-  })
-  .attr('d', arc)
-  .attr('class', d => `depth-${d.depth}`);
+    .data(root.descendants())
+    .join('path')
+    .attr('fill', d => {
+      // Root node (center) is transparent
+      if (d.depth === 0) return 'none';
+      // Month segments get their own colors
+      if (d.depth === 1) {
+        return `var(--pastel-${monthColors[d.data.monthIndex % monthColors.length]})`;
+      }
+      // Issue segments get a slightly different shade
+      const colorIndex = d.parent.children.indexOf(d) % issueColors.length;
+      return `var(--pastel-${issueColors[colorIndex]})`;
+    })
+    .attr('d', arc)
+    .attr('class', d => `depth-${d.depth}`);
 
   // Add text labels
   svg.selectAll('text')
@@ -96,11 +106,15 @@ function renderSunburst(container, data, months) {
     .text(d => d.data.name)
     .attr('class', 'sunburst-text')
     .style('visibility', d => {
-      // Hide text for very small segments or root
-      return d.depth === 0 ? 'hidden' : 'visible';
+      // Show text only for months and larger issue segments
+      if (d.depth === 0) return 'hidden';
+      if (d.depth === 1) return 'visible';
+      const angle = (d.x1 - d.x0) * 180 / Math.PI;
+      return angle > 10 ? 'visible' : 'hidden';
     });
 }
 
+// Load the JSON data and render the sunburst
 d3.json('../data/mock.json').then(data => {
   const months = getMonthNames('da-DK');
   renderSunburst('.wheel', data, months);
