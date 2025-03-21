@@ -1,98 +1,83 @@
 import { getMonthNames } from './date-util.js';
 
-// Function to calculate dimensions based on container
-function calculateDimensions(container) {
-  const containerWidth = d3.select(container).node().getBoundingClientRect().width;
-  const width = Math.min(containerWidth, 1200); // Max width of 1200px
-  const height = width;
-  const margin = width * 0.1;
-  const radius = Math.min(width, height) / 2 - margin;
-  
-  return { width, height, radius, margin };
+function createHierarchicalData(issues, months) {
+  const monthData = months.map((month, i) => ({
+    name: month,
+    monthIndex: i,
+    children: []
+  }));
+
+  issues.forEach(issue => {
+    const date = new Date(issue.created_at);
+    const monthIndex = date.getMonth();
+    monthData[monthIndex].children.push({
+      name: issue.title,
+      value: 1
+    });
+  });
+
+  return {
+    name: "root",
+    children: monthData
+  };
 }
 
-// Function to create the SVG element
-function createSVG(container) {
-  const { width, height, margin } = calculateDimensions(container);
-  
-  return d3.select(container)
+function renderSunburst(container, data, months) {
+  const width = 800;
+  const radius = width / 2;
+
+  const partition = data => {
+    return d3.partition()
+      .size([2 * Math.PI, radius])(
+        d3.hierarchy(data)
+          .sum(d => d.value || 0)
+      );
+  };
+
+  const arc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+    .padRadius(radius / 2)
+    .innerRadius(d => d.y0)
+    .outerRadius(d => d.y1 - 1);
+
+  const svg = d3.select(container)
     .append('svg')
-    .attr('viewBox', `0 0 ${width + margin * 2} ${height + margin * 2}`)
-    .attr('preserveAspectRatio', 'xMidYMid meet')
     .style('width', '100%')
     .style('height', 'auto')
-    .append('g')
-    .attr('transform', `translate(${width / 2 + margin}, ${height / 2 + margin})`);
-}
+    .attr('viewBox', `-${width/2} -${width/2} ${width} ${width}`)
+    .style('font', '10px sans-serif');
 
-// Function to create the arc generator
-function createArc(container) {
-  const { radius } = calculateDimensions(container);
-  return d3.arc()
-    .innerRadius(0)
-    .outerRadius(radius);
-}
+  const root = partition(createHierarchicalData(data, months));
 
-// Function to create the pie generator
-function createPie() {
-  return d3.pie()
-    .value(d => 1)
-    .sort(null);
-}
-
-// Function to append arcs to the SVG
-function appendArcs(svg, data, arc) {
-  const arcs = svg.selectAll('.arc')
-    .data(createPie()(data))
-    .enter()
-    .append('g')
-    .attr('class', 'arc');
-
-  arcs.append('path')
+  svg.selectAll('path')
+    .data(root.descendants())
+    .join('path')
+    .attr('fill', d => {
+      if (d.depth === 0) return 'none';
+      if (d.depth === 1) return 'var(--pastel-grey)';
+      return `var(--pastel-${d.data.name.length % 10})`;
+    })
     .attr('d', arc)
-    .attr('class', (d, i) => `segment-${i}`);
+    .attr('class', d => `depth-${d.depth}`);
 
-  arcs.append('text')
-    .attr('transform', d => `translate(${arc.centroid(d)})`)
+  svg.selectAll('text')
+    .data(root.descendants())
+    .join('text')
+    .attr('transform', d => {
+      const x = (d.x0 + d.x1) / 2 * 180 / Math.PI;
+      const y = (d.y0 + d.y1) / 2;
+      return `rotate(${x - 90}) translate(${y},0) rotate(${x < 180 ? 0 : 180})`;
+    })
     .attr('dy', '0.35em')
     .attr('text-anchor', 'middle')
-    .text(d => d.data.title);
+    .text(d => d.data.name)
+    .attr('class', 'sunburst-text');
 }
 
-// Function to append month names
-function appendMonthNames(svg, months) {
-  const { radius } = calculateDimensions('.wheel');
-  const monthArc = d3.arc()
-    .innerRadius(radius + 20)
-    .outerRadius(radius + 20);
-
-  const monthArcs = svg.selectAll('.month-arc')
-    .data(months.map((d, i) => ({
-      startAngle: (i * 2 * Math.PI) / 12,
-      endAngle: ((i + 1) * 2 * Math.PI) / 12,
-      month: d
-    })))
-    .enter()
-    .append('g')
-    .attr('class', 'month-arc');
-
-  monthArcs.append('text')
-    .attr('transform', d => `translate(${monthArc.centroid(d)})`)
-    .attr('dy', '0.35em')
-    .attr('text-anchor', 'middle')
-    .text(d => d.month);
-}
-
-// Main function to render the wheel
-function renderWheel(container, data, months) {
-  const svg = createSVG(container);
-  const arc = createArc(container);
-  appendArcs(svg, data, arc);
-  appendMonthNames(svg, months);
-}
-
-// Load the JSON data and render the wheel
+// Replace the existing render call with this:
 d3.json('../data/mock.json').then(data => {
   const months = getMonthNames('da-DK');
-  renderWheel('.wheel', data, months);
+  renderSunburst('.wheel', data, months);
 });

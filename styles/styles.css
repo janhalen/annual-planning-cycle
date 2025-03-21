@@ -56,3 +56,19 @@
 .arc path.segment-7 { fill: var(--pastel-teal); }
 .arc path.segment-8 { fill: var(--pastel-lavender); }
 .arc path.segment-9 { fill: var(--pastel-mint); }
+
+/* Sunburst specific styles */
+.depth-1 {
+  stroke: var(--dark-grey);
+  stroke-width: 1px;
+}
+
+.depth-2 {
+  stroke: white;
+  stroke-width: 0.5px;
+}
+
+.sunburst-text {
+  fill: var(--dark-grey);
+  font-size: 12px;
+}
