@@ -26,9 +26,9 @@ function createHierarchicalData(issues, months) {
 }
 
 function renderSunburst(container, data, months) {
-  // Set up dimensions
-  const width = 800;
-  const radius = width / 2;
+  // Reduce dimensions
+  const width = 600;  
+  const radius = width / 2.5;  
 
   // Create partition layout with fixed month sizes
   const partition = data => {
