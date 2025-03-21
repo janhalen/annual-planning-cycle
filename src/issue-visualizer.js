@@ -142,10 +142,11 @@ function renderSunburst(container, data, months) {
     .attr('text-anchor', 'middle')
     .text(d => d.data.name)
     .style('visibility', d => {
+      // Show text only for segments with enough space
       const angle = (d.x1 - d.x0) * 180 / Math.PI;
-      return angle > 10 ? 'visible' : 'hidden';
+      return angle > 5 ? 'visible' : 'hidden';  // Reduced angle threshold from 10 to 5
     })
-    .style('font-size', '10px')
+    .style('font-size', '8px')  // Reduced from 10px to 8px
     .style('fill', 'var(--dark-grey)');
 }
 
