@@ -5,17 +5,20 @@ function createHierarchicalData(issues, months) {
   const monthData = months.map((month, i) => ({
     name: month,
     monthIndex: i,
-    children: [],
-    value: 1  // Ensure each month segment has equal size
+    children: []  // Simple array for better D3 hierarchy handling
   }));
 
   // Map issues to their respective months
   issues.forEach(issue => {
     const date = new Date(issue.created_at);
     const monthIndex = date.getMonth();
+    const hasLabel = issue.labels.some(label => label.name === 'planning');
+    
     monthData[monthIndex].children.push({
       name: issue.title,
-      value: 1
+      value: 1,
+      isInner: hasLabel,  // Use property instead of nested structure
+      labels: issue.labels
     });
   });
 
@@ -49,8 +52,16 @@ function renderSunburst(container, data, months) {
     .endAngle(d => d.x1)
     .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
     .padRadius(radius / 2)
-    .innerRadius(d => d.y0)
-    .outerRadius(d => d.y1 - 1);
+    .innerRadius(d => {
+      if (d.depth === 0) return 0;
+      if (d.depth === 1) return radius * 0.3;
+      return d.data.isInner ? radius * 0.3 : radius * 0.5;
+    })
+    .outerRadius(d => {
+      if (d.depth === 0) return radius * 0.3;
+      if (d.depth === 1) return radius * 0.8;
+      return d.data.isInner ? radius * 0.5 : radius * 0.8;
+    });
 
   // Create SVG container
   const svg = d3.select(container)
