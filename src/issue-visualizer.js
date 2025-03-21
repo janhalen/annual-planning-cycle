@@ -2,8 +2,8 @@ import { getMonthNames } from './date-util.js';
 
 // Load the JSON data from the specified file
 d3.json('./data/mock.json').then(data => {
-  const width = 800;
-  const height = 800;
+  const width = 1200;
+  const height =1000;
   const radius = Math.min(width, height) / 2;
 
   // Get month names in Danish
