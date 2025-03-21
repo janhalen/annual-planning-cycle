@@ -9,16 +9,27 @@
     --pastel-teal: #77dd77;
     --pastel-lavender: #cfcfc4;
     --pastel-mint: #98ff98;
+    --pastel-grey: #f5f5f5;
+    --dark-grey: #444;
   }
   
   body {
-    background-color: var(--pastel-blue);
-    color: #333;
+    background-color: var(--pastel-grey);
+    color: #444;
   }
   
-  .wheel {
-    background-color: var(--pastel-green);
-  }
+ .wheel {
+    background-color: transparent;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.wheel svg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
   
   .arc path {
     stroke: #fff;
@@ -26,9 +37,22 @@
   }
   
   .arc text {
-    fill: var(--pastel-purple);
+    fill: var(--dark-grey);
+    dominant-baseline: middle;
+    text-anchor: middle;
   }
   
   .month-arc text {
-    fill: var(--pastel-pink);
+    fill: var(--dark-grey);
   }
+
+  .arc path.segment-0 { fill: var(--pastel-blue); }
+.arc path.segment-1 { fill: var(--pastel-green); }
+.arc path.segment-2 { fill: var(--pastel-yellow); }
+.arc path.segment-3 { fill: var(--pastel-pink); }
+.arc path.segment-4 { fill: var(--pastel-purple); }
+.arc path.segment-5 { fill: var(--pastel-orange); }
+.arc path.segment-6 { fill: var(--pastel-red); }
+.arc path.segment-7 { fill: var(--pastel-teal); }
+.arc path.segment-8 { fill: var(--pastel-lavender); }
+.arc path.segment-9 { fill: var(--pastel-mint); }
